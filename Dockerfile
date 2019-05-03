@@ -8,4 +8,3 @@ COPY ./load-test /test/load-test
 RUN chmod +x /test/load-test
 
 ENTRYPOINT [ "/test/load-test" ]
-CMD []

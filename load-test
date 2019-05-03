@@ -18,7 +18,7 @@ OptionParser.new do |opts|
   end
 
   opts.on('-s', '--sleep SLEEP', 'the time in seconds (can be fractional) to sleep between requests') do |sleep|
-    options[:sleep] = sleep.to_i
+    options[:sleep] = sleep.to_f
   end
 
   opts.on('-h', '--help', 'prints this help message') do
