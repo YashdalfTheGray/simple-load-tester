@@ -1,0 +1,56 @@
+#! /usr/bin/env ruby
+
+require 'optparse'
+
+options = {}
+
+OptionParser.new do |opts|
+  opts.banner = 'Usage: example.rb [options]'
+
+  opts.separator ''
+
+  opts.on('-u', '--url URL', 'required, the URL to load test') do |url|
+    options[:url] = url
+  end
+
+  opts.on('-t', '--times TIMES', 'the number of times to curl the url') do |times|
+    options[:times] = times.to_i
+  end
+
+  opts.on('-s', '--sleep SLEEP', 'the time in seconds (can be fractional) to sleep between requests') do |sleep|
+    options[:sleep] = sleep.to_i
+  end
+
+  opts.on('-h', '--help', 'prints this help message') do
+    puts opts
+    exit
+  end
+
+  opts.on('-v', '--verbose', 'run in verbose mode') do |verbose|
+    options[:verbose] = verbose || false
+  end
+end.parse!
+
+raise OptionParser::MissingArgument, 'No URL specified to load test' unless options.key? :url || !options[:url].empty?
+
+options[:times] = 1000 unless options.key? :times
+options[:sleep] = 0.25 unless options.key? :sleep
+
+puts 'Waiting for some time to start'
+initial_wait = rand
+sleep initial_wait
+puts "Waited for #{format('%.4f', initial_wait)} seconds, starting load test..."
+puts "\n"
+
+if options[:verbose]
+  puts 'Running in verbose mode'
+  puts "Load testing #{options[:url]} #{options[:times]} times"
+  puts "Waiting #{options[:sleep]} seconds between each call"
+  puts "\n"
+end
+
+(0..options[:times] - 1).each do |i|
+  curl_result = `curl -s #{options[:url]}`
+  puts "Try #{i + 1} - #{curl_result}"
+  sleep options[:sleep]
+end
