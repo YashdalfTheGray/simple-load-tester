@@ -1,0 +1,97 @@
+---
+AWSTemplateFormatVersion: 2010-09-09
+Description: >
+  CloudFormation template to spin up a Fargate cluster with the load tester
+Parameters:
+  URL:
+    Type: String
+    Description: The URL to run the load test against.
+  Times:
+    Type: Number
+    Description: The number of times to hit the URL
+    Default: 1000
+    MinValue: 0
+  Sleep:
+    Type: Number
+    Description: The time in seconds to sleep between GETs of the URL
+    Default: 0.25
+    MinValue: 0.001
+  Tasks:
+    Type: Number
+    Description: The number of fargate tasks to run for the load test
+    Default: 5
+    MinValue: 1
+    MaxValue: 50
+Resources:
+  Vpc:
+    Type: "AWS::EC2::VPC"
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsSupport: "true"
+      EnableDnsHostnames: "true"
+  PublicSubnetAz1:
+    Type: "AWS::EC2::Subnet"
+    Properties:
+      VpcId: !Ref Vpc
+      CidrBlock: 10.0.0.0/24
+      AvailabilityZone: !Select
+        - 0
+        - !GetAZs ""
+      MapPublicIpOnLaunch: true
+  PublicSubnetAz2:
+    Type: "AWS::EC2::Subnet"
+    Properties:
+      VpcId: !Ref Vpc
+      CidrBlock: 10.0.1.0/24
+      AvailabilityZone: !Select
+        - 1
+        - !GetAZs ""
+      MapPublicIpOnLaunch: true
+  PubSubnetAz3:
+    Type: "AWS::EC2::Subnet"
+    Properties:
+      VpcId: !Ref Vpc
+      CidrBlock: 10.0.2.0/24
+      AvailabilityZone: !Select
+        - 2
+        - !GetAZs ""
+      MapPublicIpOnLaunch: true
+  InternetGateway:
+    Type: "AWS::EC2::InternetGateway"
+  AttachGateway:
+    Type: "AWS::EC2::VPCGatewayAttachment"
+    Properties:
+      VpcId: !Ref Vpc
+      InternetGatewayId: !Ref InternetGateway
+  RouteViaIgw:
+    Type: "AWS::EC2::RouteTable"
+    Properties:
+      VpcId: !Ref Vpc
+  PublicRouteViaIgw:
+    Type: "AWS::EC2::Route"
+    DependsOn: AttachGateway
+    Properties:
+      RouteTableId: !Ref RouteViaIgw
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+  PublicSubnet1RouteTableAssociation:
+    Type: "AWS::EC2::SubnetRouteTableAssociation"
+    Properties:
+      SubnetId: !Ref PublicSubnetAz1
+      RouteTableId: !Ref RouteViaIgw
+  PublicSubnet2RouteTableAssociation:
+    Type: "AWS::EC2::SubnetRouteTableAssociation"
+    Properties:
+      SubnetId: !Ref PublicSubnetAz2
+      RouteTableId: !Ref RouteViaIgw
+  PublicSubnet3RouteTableAssociation:
+    Type: "AWS::EC2::SubnetRouteTableAssociation"
+    Properties:
+      SubnetId: !Ref PublicSubnetAz3
+      RouteTableId: !Ref RouteViaIgw
+  SecurityGroup:
+    Condition: CreateNewSecurityGroup
+    Type: "AWS::EC2::SecurityGroup"
+    Properties:
+      GroupDescription: ECS Allowed Ports
+      VpcId: !Ref Vpc
