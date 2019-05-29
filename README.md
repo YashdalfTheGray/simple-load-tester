@@ -1,6 +1,6 @@
 # simple-load-tester
 
-A simple load tester written in Ruby and Dockerized.
+A simple load tester written in Ruby with Docker and AWS Fargate powers 🚀
 
 ## What is this?
 
@@ -9,6 +9,16 @@ A simple load tester written in Ruby and Dockerized.
 ## How do I use it?
 
 There are a couple of ways to use this project - by cloning it down and running the load tester using the Ruby version installed on your system (Ruby version 2.6 recommended because it's the only one this has been tested against) or by running it under Docker at which point, you don't have to worry about what Ruby version you need to use.
+
+## I'm here for AWS Fargate
+
+First off, 💯
+
+This repository comes with a CloudFormation template called `load-test-with-fargate.yml` that you can use to spin up this simple load test in a Docker container on Amazon ECS using capacity from AWS Fargate! This means, no having to manage your instances and trying to register them with the ECS cluster. All of that happene through Fargate!
+
+A couple of caveats, this will probably not be free, it's going to cost some money for you to load test stuff using AWS Fargate but I imagine that these load tests won't run all month so the cost shouldn't be in the large number ranges. Secondly, since this is load test only, it uses public subnets and attaches public IP addresses to each Fargate task that is spun up. If you want private tasks, you're going to need to spin up private subnets, use a NAT Gateway and some Private Link endpoints to make the whole thing work.
+
+The only requirement is that you need to be in a region that has fargate and you need to have finished the ECS first run experience that uses Fargate to run something on ECS. This is mostly because the ECS console would have created the role that this template depends on to exist.
 
 ## Okay, but, how do I really use it?
 
