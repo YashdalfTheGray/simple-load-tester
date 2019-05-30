@@ -22,7 +22,42 @@ Parameters:
     Default: 5
     MinValue: 1
     MaxValue: 50
+  MasterRegion:
+    Type: String
+    Description: When using CloudFormation Stacksets, all the logs will be delivered to this region
+    Default: !Ref "AWS::Region"
 Resources:
+  LoadTestLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: "/ecs/load-test-taskdef"
+  LoadTestTaskdef:
+    Type: AWS::ECS::TaskDefinition
+    DependsOn: LoadTestLogGroup
+    Properties:
+      ContainerDefinitions:
+        - Command:
+            - !Join [" ", ["--url", !Ref URL]]
+            - !Join [" ", ["--times", !Ref Times]]
+            - !Join [" ", ["--sleep", !Ref Sleep]]
+          Essential: true
+          Image: yashdalfthegray/simple-load-tester
+          LogConfiguration:
+            logDriver: awslogs
+            options:
+              awslogs-group: "/ecs/load-test-taskdef"
+              awslogs-region: !Ref MasterRegion
+              awslogs-stream-prefix: ecs
+          Name: load-tester-container
+      Cpu: 512
+      ExecutionRoleArn: !Join
+        - ""
+        - - "arn:aws:iam::"
+          - !Ref "AWS::AccountId"
+          - ":role/ecsTaskExecutionRole"
+      Family: load-test-taskdef
+      Memory: 1024
+      NetworkMode: awsvpc
   Vpc:
     Type: "AWS::EC2::VPC"
     Properties:
