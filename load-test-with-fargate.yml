@@ -1,7 +1,6 @@
 ---
 AWSTemplateFormatVersion: 2010-09-09
-Description: >
-  CloudFormation template to spin up a Fargate cluster with the load tester
+Description: CloudFormation template to spin up a Fargate cluster with the load tester
 Parameters:
   URL:
     Type: String
@@ -19,7 +18,7 @@ Parameters:
   Tasks:
     Type: Number
     Description: The number of fargate tasks to run for the load test
-    Default: 5
+    Default: 6
     MinValue: 1
     MaxValue: 50
   MasterRegion:
@@ -28,11 +27,11 @@ Parameters:
     Default: !Ref "AWS::Region"
 Resources:
   LoadTestLogGroup:
-    Type: AWS::Logs::LogGroup
+    Type: "AWS::Logs::LogGroup"
     Properties:
       LogGroupName: "/ecs/load-test-taskdef"
   LoadTestTaskdef:
-    Type: AWS::ECS::TaskDefinition
+    Type: "AWS::ECS::TaskDefinition"
     DependsOn: LoadTestLogGroup
     Properties:
       ContainerDefinitions:
@@ -41,7 +40,7 @@ Resources:
             - !Join [" ", ["--times", !Ref Times]]
             - !Join [" ", ["--sleep", !Ref Sleep]]
           Essential: true
-          Image: yashdalfthegray/simple-load-tester
+          Image: "yashdalfthegray/simple-load-tester"
           LogConfiguration:
             logDriver: awslogs
             options:
@@ -58,17 +57,21 @@ Resources:
       Family: load-test-taskdef
       Memory: 1024
       NetworkMode: awsvpc
+  LoadTestCluster:
+    Type: "AWS::ECS::Cluster"
+    Properties:
+      ClusterName: load-test-cluster
   Vpc:
     Type: "AWS::EC2::VPC"
     Properties:
-      CidrBlock: 10.0.0.0/16
+      CidrBlock: "10.0.0.0/16"
       EnableDnsSupport: "true"
       EnableDnsHostnames: "true"
   PublicSubnetAz1:
     Type: "AWS::EC2::Subnet"
     Properties:
       VpcId: !Ref Vpc
-      CidrBlock: 10.0.0.0/24
+      CidrBlock: "10.0.0.0/24"
       AvailabilityZone: !Select
         - 0
         - !GetAZs ""
@@ -77,7 +80,7 @@ Resources:
     Type: "AWS::EC2::Subnet"
     Properties:
       VpcId: !Ref Vpc
-      CidrBlock: 10.0.1.0/24
+      CidrBlock: "10.0.1.0/24"
       AvailabilityZone: !Select
         - 1
         - !GetAZs ""
@@ -86,7 +89,7 @@ Resources:
     Type: "AWS::EC2::Subnet"
     Properties:
       VpcId: !Ref Vpc
-      CidrBlock: 10.0.2.0/24
+      CidrBlock: "10.0.2.0/24"
       AvailabilityZone: !Select
         - 2
         - !GetAZs ""
@@ -125,8 +128,28 @@ Resources:
       SubnetId: !Ref PublicSubnetAz3
       RouteTableId: !Ref RouteViaIgw
   SecurityGroup:
-    Condition: CreateNewSecurityGroup
     Type: "AWS::EC2::SecurityGroup"
     Properties:
       GroupDescription: ECS Allowed Ports
       VpcId: !Ref Vpc
+  LoadTestService:
+    Type: "AWS::ECS::Service"
+    DependsOn:
+      - LoadTestCluster
+      - LoadTestTaskdef
+    Properties:
+      Cluster: !Ref LoadTestCluster
+      DesiredCount: !Ref Tasks
+      LaunchType: FARGATE
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: DISABLED
+          SecurityGroups:
+            - !Ref SecurityGroup
+          Subnets:
+            - !Ref PublicSubnetAz1
+            - !Ref PublicSubnetAz2
+            - !Ref PublicSubnetAz3
+      PlatformVersion: LATEST
+      ServiceName: load-test-service
+      TaskDefinition: !Ref LoadTestTaskdef
