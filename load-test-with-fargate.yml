@@ -1,155 +1,79 @@
 ---
-AWSTemplateFormatVersion: 2010-09-09
-Description: CloudFormation template to spin up a Fargate cluster with the load tester
+AWSTemplateFormatVersion: "2010-09-09"
+Description: AWS CloudFormation template to create sixthsense resources for ECS canaries
 Parameters:
   URL:
     Type: String
-    Description: The URL to run the load test against.
-  Times:
+    Description: The URL to load test
+  DesiredTaskCount:
     Type: Number
-    Description: The number of times to hit the URL
+    Description: Number of tasks to run for the load test
+    Default: 5
+    MinValue: 1
+    MaxValue: 20
+  Tries:
+    Type: Number
+    Description: Number of tries per load test
     Default: 1000
-    MinValue: 0
   Sleep:
     Type: Number
-    Description: The time in seconds to sleep between GETs of the URL
-    Default: 0.25
-    MinValue: 0.001
-  Tasks:
-    Type: Number
-    Description: The number of fargate tasks to run for the load test
-    Default: 6
-    MinValue: 1
-    MaxValue: 50
+    Description: Time in seconds to sleep between tries
+    Default: 0.1
   MasterRegion:
-    Type: String
-    Description: When using CloudFormation Stacksets, all the logs will be delivered to this region
-    Default: !Ref "AWS::Region"
+    Type: string
+    Description: When using Stacksets, the region to deliver all the logs to
+    Default:
+      Ref: "AWS::Region"
 Resources:
-  LoadTestLogGroup:
-    Type: "AWS::Logs::LogGroup"
+  LoadTesterLogGroup:
+    Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: "/ecs/load-test-taskdef"
-  LoadTestTaskdef:
-    Type: "AWS::ECS::TaskDefinition"
-    DependsOn: LoadTestLogGroup
+      LogGroupName: /ecs/color-info-taskdef
+      RetentionInDays: 365
+  LoadTesterTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    DependsOn:
+      - LoadTesterLogGroup
     Properties:
-      ContainerDefinitions:
-        - Command:
-            - !Join [" ", ["--url", !Ref URL]]
-            - !Join [" ", ["--times", !Ref Times]]
-            - !Join [" ", ["--sleep", !Ref Sleep]]
-          Essential: true
-          Image: "yashdalfthegray/simple-load-tester"
-          LogConfiguration:
-            logDriver: awslogs
-            options:
-              awslogs-group: "/ecs/load-test-taskdef"
-              awslogs-region: !Ref MasterRegion
-              awslogs-stream-prefix: ecs
-          Name: load-tester-container
-      Cpu: 512
-      ExecutionRoleArn: !Join
-        - ""
-        - - "arn:aws:iam::"
-          - !Ref "AWS::AccountId"
-          - ":role/ecsTaskExecutionRole"
-      Family: load-test-taskdef
-      Memory: 1024
+      RequiresCompatibilities:
+        - FARGATE
+      Volumes: []
       NetworkMode: awsvpc
-  LoadTestCluster:
-    Type: "AWS::ECS::Cluster"
+      Memory: 2048
+      Cpu: 512
+      ExecutionRoleArn:
+        Fn::Join:
+          - ""
+          - - "arn:aws:iam::"
+            - Ref: "AWS::AccountId"
+            - ":role/ecsTaskExecutionRole"
+      PlacementConstraints: []
+      Family: simple-load-tester-taskdef
+      ContainerDefinitions:
+        - Name: load-test
+          Image: yashdalfthegray/simple-load-tester:latest
+          Essential: true
+          Command:
+            - "--url"
+            - Ref: URL
+            - "--times"
+            - Ref: Tries
+            - "--sleep"
+            - Ref: Sleep
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              "awslogs-group": "/ecs/simple-load-tester-taskdef"
+              "awslogs-region":
+                Ref: MasterRegion
+              "awslogs-stream-prefix": "ecs"
+  LoadTesterCluster:
+    Type: AWS::ECS::Cluster
     Properties:
-      ClusterName: load-test-cluster
+      ClusterName: "load-test-cluster"
   Vpc:
-    Type: "AWS::EC2::VPC"
+    Type: AWS::EC2::VPC
     Properties:
-      CidrBlock: "10.0.0.0/16"
+      CidrBlock: 10.0.0.0/16
       EnableDnsSupport: "true"
       EnableDnsHostnames: "true"
-  PublicSubnetAz1:
-    Type: "AWS::EC2::Subnet"
-    Properties:
-      VpcId: !Ref Vpc
-      CidrBlock: "10.0.0.0/24"
-      AvailabilityZone: !Select
-        - 0
-        - !GetAZs ""
-      MapPublicIpOnLaunch: true
-  PublicSubnetAz2:
-    Type: "AWS::EC2::Subnet"
-    Properties:
-      VpcId: !Ref Vpc
-      CidrBlock: "10.0.1.0/24"
-      AvailabilityZone: !Select
-        - 1
-        - !GetAZs ""
-      MapPublicIpOnLaunch: true
-  PubSubnetAz3:
-    Type: "AWS::EC2::Subnet"
-    Properties:
-      VpcId: !Ref Vpc
-      CidrBlock: "10.0.2.0/24"
-      AvailabilityZone: !Select
-        - 2
-        - !GetAZs ""
-      MapPublicIpOnLaunch: true
-  InternetGateway:
-    Type: "AWS::EC2::InternetGateway"
-  AttachGateway:
-    Type: "AWS::EC2::VPCGatewayAttachment"
-    Properties:
-      VpcId: !Ref Vpc
-      InternetGatewayId: !Ref InternetGateway
-  RouteViaIgw:
-    Type: "AWS::EC2::RouteTable"
-    Properties:
-      VpcId: !Ref Vpc
-  PublicRouteViaIgw:
-    Type: "AWS::EC2::Route"
-    DependsOn: AttachGateway
-    Properties:
-      RouteTableId: !Ref RouteViaIgw
-      DestinationCidrBlock: 0.0.0.0/0
-      GatewayId: !Ref InternetGateway
-  PublicSubnet1RouteTableAssociation:
-    Type: "AWS::EC2::SubnetRouteTableAssociation"
-    Properties:
-      SubnetId: !Ref PublicSubnetAz1
-      RouteTableId: !Ref RouteViaIgw
-  PublicSubnet2RouteTableAssociation:
-    Type: "AWS::EC2::SubnetRouteTableAssociation"
-    Properties:
-      SubnetId: !Ref PublicSubnetAz2
-      RouteTableId: !Ref RouteViaIgw
-  PublicSubnet3RouteTableAssociation:
-    Type: "AWS::EC2::SubnetRouteTableAssociation"
-    Properties:
-      SubnetId: !Ref PublicSubnetAz3
-      RouteTableId: !Ref RouteViaIgw
-  SecurityGroup:
-    Type: "AWS::EC2::SecurityGroup"
-    Properties:
-      GroupDescription: ECS Allowed Ports
-      VpcId: !Ref Vpc
-  LoadTestService:
-    Type: "AWS::ECS::Service"
-    DependsOn:
-      - LoadTestCluster
-      - LoadTestTaskdef
-    Properties:
-      Cluster: !Ref LoadTestCluster
-      DesiredCount: !Ref Tasks
-      LaunchType: FARGATE
-      NetworkConfiguration:
-        AwsvpcConfiguration:
-          AssignPublicIp: DISABLED
-          SecurityGroups:
-            - !Ref SecurityGroup
-          Subnets:
-            - !Ref PublicSubnetAz1
-            - !Ref PublicSubnetAz2
-            - !Ref PublicSubnetAz3
-      PlatformVersion: LATEST
-      ServiceName: load-test-service
-      TaskDefinition: !Ref LoadTestTaskdef
