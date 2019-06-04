@@ -77,3 +77,90 @@ Resources:
       CidrBlock: 10.0.0.0/16
       EnableDnsSupport: "true"
       EnableDnsHostnames: "true"
+  PublicSubnetAz1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId:
+        Ref: Vpc
+      CidrBlock: 10.0.0.0/24
+      AvailabilityZone:
+        Fn::Select:
+          - "0"
+          - Fn::GetAZs:
+              Ref: AWS::Region
+  PublicSubnetAz2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId:
+        Ref: Vpc
+      CidrBlock: 10.0.1.0/24
+      AvailabilityZone:
+        Fn::Select:
+          - "1"
+          - Fn::GetAZs:
+              Ref: AWS::Region
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId:
+        Ref: Vpc
+      InternetGatewayId:
+        Ref: InternetGateway
+  RouteViaIgw:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId:
+        Ref: Vpc
+  PublicRouteViaIgw:
+    Type: AWS::EC2::Route
+    DependsOn: AttachGateway
+    Properties:
+      RouteTableId:
+        Ref: RouteViaIgw
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId:
+        Ref: InternetGateway
+  PublicSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId:
+        Ref: PublicSubnetAz1
+      RouteTableId:
+        Ref: RouteViaIgw
+  PublicSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId:
+        Ref: PublicSubnetAz2
+      RouteTableId:
+        Ref: RouteViaIgw
+  LoadTestSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for the load test tasks
+      VpcId:
+        Ref: Vpc
+  LoadTesterService:
+    Type: AWS::ECS::Service
+    DependsOn:
+      - LoadTesterCluster
+      - LoadTesterTaskDefinition
+    Properties:
+      Cluster:
+        Ref: LoadTesterCluster
+      DesiredCount:
+        Ref: DesiredTaskCount
+      LaunchType: FARGATE
+      ServiceName: load-test-service
+      TaskDefinition:
+        Ref: LoadTesterTaskDefinition
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: ENABLED
+          SecurityGroups:
+            - Ref: LoadTestSecurityGroup
+          Subnets:
+            - Ref: PublicSubnetAz1
+            - Ref: PublicSubnetAz2
