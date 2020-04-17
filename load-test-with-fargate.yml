@@ -1,6 +1,6 @@
 ---
 AWSTemplateFormatVersion: "2010-09-09"
-Description: AWS CloudFormation template to create sixthsense resources for ECS canaries
+Description: AWS CloudFormation template to create load testing resources
 Parameters:
   URL:
     Type: String
